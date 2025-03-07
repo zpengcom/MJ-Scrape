@@ -1,0 +1,40 @@
+{
+  "manifest_version": 3,
+  "name": "MidJourney Scraper",
+  "version": "1.0",
+  "description": "Scrape images, prompts, and usernames from MidJourney Explore page.",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png"
+    },
+    "default_title": "Open MidJourney"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "clipboardRead",
+    "clipboardWrite"
+  ],
+  "host_permissions": [
+    "https://www.midjourney.com/explore?tab=*",
+    "https://www.midjourney.com/explore?user_id=*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.midjourney.com/explore?tab=*",
+        "https://www.midjourney.com/explore?user_id=*"
+      ],
+      "js": ["content.js"]
+    }
+  ]
+}

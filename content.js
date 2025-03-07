@@ -1,4 +1,4 @@
-// 避免重复创建按钮的工具函数
+// 避免重复创建元素的工具函数
 function ensureElementDoesNotExist(id) {
     const existingElement = document.getElementById(id);
     if (existingElement) {
@@ -57,9 +57,11 @@ function createResultWindow() {
         <div class="header-content">
             <div class="title-section">
                 <div class="drag-handle">结果窗口</div>
-                <div class="status-text"></div>
+                <div class="status-text">等待抓取...</div>
             </div>
             <div class="header-controls">
+                <button id="select-all" class="small-button">全选</button>
+                <button id="invert-selection" class="small-button">反选</button>
                 <button class="export-button" style="display: none;">导出CSV</button>
                 <button class="window-close" title="关闭">×</button>
             </div>
@@ -71,11 +73,10 @@ function createResultWindow() {
     contentDiv.className = 'result-content';
     resultDiv.appendChild(contentDiv);
 
-    // 添加底部提示元素
     const bottomIndicator = document.createElement('div');
     bottomIndicator.className = 'bottom-indicator';
     bottomIndicator.textContent = '到底了';
-    bottomIndicator.style.display = 'none'; // 初始隐藏
+    bottomIndicator.style.display = 'none';
     contentDiv.appendChild(bottomIndicator);
 
     const resizeHandle = document.createElement('div');
@@ -84,12 +85,24 @@ function createResultWindow() {
 
     document.body.appendChild(resultDiv);
 
+    const selectAllButton = headerBar.querySelector('#select-all');
+    const invertSelectionButton = headerBar.querySelector('#invert-selection');
+
+    selectAllButton.addEventListener('click', () => {
+        const checkboxes = contentDiv.querySelectorAll('.select-item');
+        checkboxes.forEach(checkbox => checkbox.checked = true);
+    });
+
+    invertSelectionButton.addEventListener('click', () => {
+        const checkboxes = contentDiv.querySelectorAll('.select-item');
+        checkboxes.forEach(checkbox => checkbox.checked = !checkbox.checked);
+    });
+
     let isDragging = false;
     let isResizing = false;
     let currentX, currentY, initialX, initialY;
     let startWidth, startHeight, startMouseX, startMouseY;
 
-    // 拖动窗口
     headerBar.addEventListener('mousedown', (e) => {
         if (e.target.classList.contains('window-close') || e.target.classList.contains('export-button')) return;
         isDragging = true;
@@ -121,7 +134,6 @@ function createResultWindow() {
         }
     });
 
-    // 设置初始位置并限制在视口内
     resultDiv.style.top = '50%';
     resultDiv.style.left = '50%';
     resultDiv.style.transform = 'translate(-50%, -50%)';
@@ -162,7 +174,6 @@ function createResultWindow() {
     });
     resizeObserver.observe(resultDiv);
 
-    // 调整窗口大小
     resizeHandle.addEventListener('mousedown', (e) => {
         isResizing = true;
         e.preventDefault();
@@ -191,7 +202,6 @@ function createResultWindow() {
         isResizing = false;
     });
 
-    // 优化滚动事件监听，确保鼠标滚轮也能触发“到底了”提示
     contentDiv.addEventListener('scroll', () => {
         const scrollTop = contentDiv.scrollTop;
         const scrollHeight = contentDiv.scrollHeight;
@@ -301,13 +311,14 @@ function createScrapeButton(buttonContainer) {
             scrapeButton.querySelector('.icon-stop').style.display = 'block';
             scrapeButton.title = '停止抓取';
             scrapeButton.classList.add('scraping');
-            
+            resultDiv.querySelector('.status-text').textContent = '正在抓取...';
             scrollAndScrape(() => isScraping);
         } else {
             scrapeButton.querySelector('.icon-search').style.display = 'block';
             scrapeButton.querySelector('.icon-stop').style.display = 'none';
             scrapeButton.title = '开始抓取';
             scrapeButton.classList.remove('scraping');
+            resultDiv.querySelector('.status-text').textContent = '抓取完成';
         }
     });
 }
@@ -318,13 +329,23 @@ function isContentLoaded(pageScroll) {
     return loadingIndicators.length === 0;
 }
 
-// 滚动并同时抓取数据
+// 分离 Prompt 和 Prompt 参数
+function splitPrompt(fullPrompt) {
+    const paramStartIndex = fullPrompt.indexOf('--');
+    if (paramStartIndex === -1) {
+        return { promptText: fullPrompt.trim(), promptParams: '' };
+    }
+    return {
+        promptText: fullPrompt.substring(0, paramStartIndex).trim(),
+        promptParams: fullPrompt.substring(paramStartIndex).trim()
+    };
+}
+
+// 滚动并抓取数据
 async function scrollAndScrape(checkActive) {
-    //初始延迟
     await new Promise(resolve => setTimeout(resolve, 1000));
     
-    //滚动延迟
-    const scrollDelay = parseInt(localStorage.getItem('scrollDelay') || 100);
+    const scrollDelay = parseInt(localStorage.getItem('scrollDelay') || 1000);
     
     const resultDiv = document.getElementById('scrapeResult');
     if (!resultDiv) return;
@@ -429,33 +450,29 @@ async function scrollAndScrape(checkActive) {
                             }
                         } else {
                             console.warn('未找到 Copy prompt 按钮');
-                            const promptTextElement = parentContainer.querySelector('div[class*="prompt"], span[class*="prompt"], p[class*="prompt"]');
-                            if (promptTextElement) {
-                                prompt = promptTextElement.textContent.trim();
-                                console.log('从 DOM 中提取到 Prompt:', prompt);
-                            }
                         }
                     } else {
                         console.warn('未找到 Prompt 按钮容器');
                     }
                     
-                    // 确保不会重复添加
                     if (!seenIds.has(jobId)) {
                         seenIds.add(jobId);
                         console.log(`添加新数据，jobId: ${jobId}`);
+                        const { promptText, promptParams } = splitPrompt(prompt);
                         scrapedData.push({
                             imgLink,
                             jobLink: link.href,
-                            imgId: jobId,
+                            jobId,
                             userName: userInfo.userName,
                             userId: userInfo.userId,
                             userProfileLink: userInfo.userProfileLink,
-                            prompt,
+                            prompt: promptText,
+                            promptParams,
                             metadata: ''
                         });
-                        updateResultDisplay(resultDiv, scrapedData, true);
-                    } else {
-                        console.log(`跳过重复的 jobId: ${jobId}`);
+                        resultDiv.querySelector('.status-text').textContent = 
+                            `正在抓取中...（已抓取 ${scrapedData.length} 张不重复图片）`;
+                        updateResultDisplay(scrapedData, contentDiv, true);
                     }
                 }
             } catch (error) {
@@ -463,24 +480,14 @@ async function scrollAndScrape(checkActive) {
             }
         }
         
-        if (!checkActive()) {
-            console.log('收到停止指令，退出外层循环');
-            break;
-        }
+        if (!checkActive()) break;
 
         while (!isContentLoaded(pageScroll)) {
-            if (!checkActive()) {
-                console.log('等待内容加载过程中收到停止指令，退出加载等待');
-                break;
-            }
-            //等待内容加载的延迟
-            await new Promise(resolve => setTimeout(resolve, 5000));
+            if (!checkActive()) break;
+            await new Promise(resolve => setTimeout(resolve, 500));
         }
         
-        if (!checkActive()) {
-            console.log('加载完成检查后收到停止指令，退出循环');
-            break;
-        }
+        if (!checkActive()) break;
 
         const currentHeight = pageScroll.scrollTop;
         pageScroll.scrollTo({
@@ -500,6 +507,8 @@ async function scrollAndScrape(checkActive) {
                     scrapeButton.querySelector('.icon-stop').style.display = 'none';
                     scrapeButton.title = '开始抓取';
                     scrapeButton.classList.remove('scraping');
+                    resultDiv.querySelector('.status-text').textContent = 
+                        `抓取完成（共抓取 ${scrapedData.length} 张不重复图片）`;
                 }
                 break;
             }
@@ -509,35 +518,41 @@ async function scrollAndScrape(checkActive) {
         }
     }
     
-    // 停止抓取后，仅更新状态，不重复添加内容
     const button = document.getElementById('scrapeButton');
     if (button) {
         button.title = '开始抓取';
         button.classList.remove('scraping');
         button.querySelector('.icon-search').style.display = 'block';
         button.querySelector('.icon-stop').style.display = 'none';
+        resultDiv.querySelector('.status-text').textContent = 
+            `抓取完成（共抓取 ${scrapedData.length} 张不重复图片）`;
     }
     
     console.log('抓取结束，最终数据量:', scrapedData.length);
-    updateResultDisplay(resultDiv, scrapedData, false);
+    updateResultDisplay(scrapedData, contentDiv, false);
 }
 
-// 获取最大尺寸的图片链接
+// 获取最大尺寸图片链接并去掉分辨率标记
 function getMaxSizeImageUrl(style) {
     if (!style) return '未找到图片';
     
     const urls = style.match(/url\("([^"]+)"\)/g) || [];
     const imageUrls = urls.map(url => url.match(/url\("([^"]+)"\)/)[1]);
     
-    return imageUrls.reduce((max, current) => {
-        const currentRes = current.match(/(\d+)_N\.webp$/);
-        const maxRes = max.match(/(\d+)_N\.webp$/);
+    const maxUrl = imageUrls.reduce((max, current) => {
+        const currentRes = current.match(/(\d+)_N\.(webp|png)$/);
+        const maxRes = max.match(/(\d+)_N\.(webp|png)$/);
         
         if (!currentRes) return max;
         if (!maxRes) return current;
         
         return parseInt(currentRes[1]) > parseInt(maxRes[1]) ? current : max;
     }, imageUrls[0] || '未找到图片');
+    
+    if (maxUrl !== '未找到图片') {
+        return maxUrl.replace(/_\d+_N(\.(webp|png))$/, '$1');
+    }
+    return maxUrl;
 }
 
 // 提取用户信息
@@ -566,80 +581,90 @@ function extractUserInfo(container) {
 }
 
 // 更新结果显示
-function updateResultDisplay(resultDiv, scrapedData, isPartial = false) {
-    const contentDiv = resultDiv.querySelector('.result-content');
-    const statusText = resultDiv.querySelector('.status-text');
-    const exportButton = resultDiv.querySelector('.export-button');
-    
-    const header = isPartial ? '正在抓取中...' : '抓取完成';
-    statusText.textContent = `${header} (已抓取 ${scrapedData.length} 张不重复图片)`;
-    
-    exportButton.style.display = !isPartial && scrapedData.length > 0 ? 'inline-block' : 'none';
-    
-    // 仅在抓取过程中添加新内容
-    if (isPartial && scrapedData.length > 0) {
-        const newItem = scrapedData[scrapedData.length - 1];
-        const existingItems = contentDiv.querySelectorAll('.result-item');
-        const lastItemId = existingItems.length > 0 ? existingItems[existingItems.length - 1].dataset.imgId : null;
-
-        // 避免重复添加相同的内容
-        if (!lastItemId || lastItemId !== newItem.imgId) {
-            const itemDiv = document.createElement('div');
-            itemDiv.className = 'result-item';
-            itemDiv.dataset.imgId = newItem.imgId; // 添加标识，防止重复
-            itemDiv.innerHTML = `
-                <p class="primary"><strong>图片 ${scrapedData.length}:</strong></p>
-                <p class="primary">Prompt: ${newItem.prompt}</p>
-                <p class="secondary">图片链接: <a href="${newItem.imgLink}" target="_blank">${newItem.imgLink}</a></p>
-                <p class="secondary">作品链接: <a href="${newItem.jobLink}" target="_blank">${newItem.jobLink}</a></p>
-                <p class="secondary">图片ID: ${newItem.imgId}</p>
-                <p class="secondary">用户名: <a href="${newItem.userProfileLink}" target="_blank">${newItem.userName}</a></p>
-                <p class="secondary">用户ID: ${newItem.userId}</p>
-                ${newItem.metadata ? `<p class="secondary">其他信息: ${newItem.metadata}</p>` : ''}
-            `;
-            contentDiv.insertBefore(itemDiv, contentDiv.querySelector('.bottom-indicator'));
-            console.log(`添加新显示项，imgId: ${newItem.imgId}`);
-
-            // 仅当用户未接近底部时，自动滚动到最新内容
-            const nearBottom = contentDiv.scrollTop + contentDiv.clientHeight >= contentDiv.scrollHeight - 50;
-            if (!nearBottom) {
-                contentDiv.scrollTo({
-                    top: contentDiv.scrollHeight,
-                    behavior: 'smooth'
-                });
-            }
-        } else {
-            console.log(`跳过重复显示项，imgId: ${newItem.imgId}`);
-        }
+function updateResultDisplay(scrapedData, contentDiv, isPartial = false) {
+    if (!isPartial) {
+        contentDiv.innerHTML = '';
     }
 
-    if (!isPartial && scrapedData.length > 0) {
+    const newItems = isPartial ? [scrapedData[scrapedData.length - 1]] : scrapedData;
+    
+    newItems.forEach((newItem, index) => {
+        // 预览图保持 _384_N.webp 不变
+        let previewImgLink = newItem.imgLink.replace(/(\.(webp|png))$/, '_384_N$1');
+        // 展示窗口中的图片链接强制替换为 .png
+        let displayImgLink = newItem.imgLink.replace(/\.webp$/, '.png');
+        
+        const itemDiv = document.createElement('div');
+        itemDiv.className = 'result-item';
+        itemDiv.innerHTML = `
+            <input type="checkbox" class="select-item" data-id="${newItem.jobId}" checked>
+            <img src="${previewImgLink}" alt="Preview" style="width:100px; height:auto; border-radius:4px;" onerror="this.src='${newItem.imgLink}'">
+            <div class="content">
+                <p><strong>图片 ${index + 1}:</strong></p>
+                <p>Prompt: <span class="prompt-text" style="cursor: pointer;" title="点击复制">${newItem.prompt}</span>
+                    ${newItem.promptParams ? `<span class="prompt-params" style="color: #888;">${newItem.promptParams}</span>` : ''}
+                </p>
+                <p>图片链接: <a href="${displayImgLink}" target="_blank">${displayImgLink}</a></p>
+                <p>任务ID: ${newItem.jobId}</p>
+                <p>用户名: <a href="${newItem.userProfileLink}" target="_blank">${newItem.userName}</a></p>
+                <p>用户ID: ${newItem.userId}</p>
+            </div>
+        `;
+        contentDiv.appendChild(itemDiv);
+
+        const promptTextElement = itemDiv.querySelector('.prompt-text');
+        promptTextElement.addEventListener('click', () => {
+            navigator.clipboard.writeText(newItem.prompt).then(() => {
+                console.log(`已复制 Prompt 到剪切板: ${newItem.prompt}`);
+                promptTextElement.style.color = '#4caf50';
+                setTimeout(() => promptTextElement.style.color = '', 1000);
+            }).catch(err => {
+                console.error('复制失败:', err);
+            });
+        });
+    });
+
+    const exportButton = document.querySelector('.export-button');
+    if (scrapedData.length > 0) {
+        exportButton.style.display = 'inline-block';
         exportButton.onclick = () => exportToCSV(scrapedData);
     }
 }
 
-// 导出为CSV文件
-function exportToCSV(data) {
+// 导出为 CSV
+function exportToCSV(scrapedData) {
+    const selectedIds = Array.from(document.querySelectorAll('.select-item:checked')).map(cb => cb.dataset.id);
+    const selectedData = scrapedData.filter(item => selectedIds.includes(item.jobId));
+    
+    if (selectedData.length === 0) {
+        alert('请先选择要导出的项');
+        return;
+    }
+    
     const BOM = '\uFEFF';
     const csvContent = BOM + [
-        ['Prompt', '图片ID', '图片链接', '任务链接', '用户名', '用户ID', '用户主页', '其他信息'].join(','),
-        ...data.map(item => [
-            `"${item.prompt.replace(/"/g, '""')}"`,
-            item.imgId,
-            item.imgLink,
-            item.jobLink,
-            item.userName,
-            item.userId,
-            item.userProfileLink,
-            `"${item.metadata.replace(/"/g, '""')}"`
-        ].join(','))
+        ['Prompt', 'Prompt 参数', '任务ID', '任务链接', '图片链接', '用户名', '用户ID', '用户主页', '其他信息'].join(','),
+        ...selectedData.map(item => {
+            // 导出时强制将图片链接中的 .webp 替换为 .png
+            let exportImgLink = item.imgLink.replace(/\.webp$/, '.png');
+            return [
+                `"${item.prompt.replace(/"/g, '""')}"`,
+                `"${item.promptParams.replace(/"/g, '""')}"`,
+                item.jobId,
+                item.jobLink,
+                exportImgLink,
+                item.userName,
+                item.userId,
+                item.userProfileLink,
+                `"${item.metadata.replace(/"/g, '""')}"`
+            ].join(',');
+        })
     ].join('\n');
 
     const now = new Date();
     const utc8Date = new Date(now.getTime() + (8 * 60 * 60 * 1000));
     const dateStr = utc8Date.toISOString().replace(/[:.]/g, '-').replace('T', '_').split('.')[0];
 
-    // 根据页面类型动态生成文件名
     let fileNamePrefix = 'MJ';
     const url = window.location.href;
 
@@ -648,13 +673,10 @@ function exportToCSV(data) {
     } else if (url.includes('tab=likes')) {
         fileNamePrefix = 'MJ-likes';
     } else if (url.includes('user_id=')) {
-        // 获取用户ID
         const userIdMatch = url.match(/user_id=([^&]+)/);
         const userId = userIdMatch ? userIdMatch[1] : 'unknown';
-        // 从数据中获取用户名（假设用户数据在 scrapedData 中）
-        const userName = data.length > 0 && data[0].userName !== '未找到用户名' 
-            ? data[0].userName.replace(/[^a-zA-Z0-9_-]/g, '_') // 清理非法字符
-            : 'unknown';
+        const userName = selectedData.length > 0 && selectedData[0].userName !== '未找到用户名' 
+            ? selectedData[0].userName.replace(/[^a-zA-Z0-9_-]/g, '_') : 'unknown';
         fileNamePrefix = `MJ-${userName}-${userId}`;
     }
 
@@ -729,7 +751,6 @@ style.textContent = `
         background-color: #e53935 !important;
     }
     
-    /* 展示窗口样式 */
     .result-window {
         position: fixed;
         top: 50%;
@@ -810,6 +831,22 @@ style.textContent = `
         background-color: #43a047;
     }
     
+    .small-button {
+        background-color: #4caf50;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        padding: 4px 8px;
+        cursor: pointer;
+        font-size: 12px;
+        margin-right: 5px;
+        transition: all 0.2s ease;
+    }
+    
+    .small-button:hover {
+        background-color: #43a047;
+    }
+    
     .window-close {
         background: none;
         border: none;
@@ -824,7 +861,6 @@ style.textContent = `
         color: #ff5252;
     }
     
-    /* 内容区域样式 */
     .result-content {
         height: calc(100% - 60px);
         max-height: calc(100% - 60px);
@@ -859,48 +895,45 @@ style.textContent = `
         background: #888;
     }
     
-    /* 美化 result-item 样式，主次分明 */
     .result-item {
-        background-color: #2a2a2a;
+        display: flex;
+        align-items: flex-start;
+        gap: 15px;
         padding: 15px;
-        margin-bottom: 15px;
+        background-color: #2a2a2a;
         border-radius: 6px;
+        margin-bottom: 15px;
         border: 1px solid #444;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.3);
         transition: all 0.2s ease;
     }
     
     .result-item:hover {
         background-color: #353535;
         transform: translateY(-2px);
-        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.4);
     }
     
-    /* 主要信息：图片编号和 Prompt */
-    .result-item p.primary {
+    .result-item img {
+        width: 100px;
+        height: auto;
+        border-radius: 4px;
+    }
+    
+    .result-item .content {
+        flex: 1;
+    }
+    
+    .result-item p {
         margin: 6px 0;
         font-size: 14px;
-        font-weight: 600;
-        color: #ffffff;
         line-height: 1.6;
-    }
-    
-    /* 次要信息：链接、ID 等 */
-    .result-item p.secondary {
-        margin: 4px 0;
-        font-size: 12px;
-        color: #b0b0b0;
-        line-height: 1.5;
-    }
-    
-    .result-item p strong {
         color: #ffffff;
     }
     
     .result-item a {
         color: #66b0ff;
         text-decoration: none;
-        transition: color 0.2s ease;
     }
     
     .result-item a:hover {
@@ -918,7 +951,6 @@ style.textContent = `
         cursor: nwse-resize;
     }
     
-    /* 底部提示样式 */
     .bottom-indicator {
         text-align: center;
         color: #888;
@@ -930,7 +962,6 @@ style.textContent = `
         border-top: 1px solid #333;
     }
     
-    /* 设置面板样式 */
     .settings-panel {
         position: fixed;
         top: 50%;
@@ -1011,12 +1042,6 @@ style.textContent = `
     .save-button:hover {
         background-color: #218838;
     }
-    
-    .success-message {
-        color: #28a745;
-        font-weight: bold;
-        margin: 10px 0;
-    }
 `;
 document.head.appendChild(style);
 
@@ -1057,5 +1082,4 @@ function init() {
     console.log('MJ抓取工具: 所有UI组件已创建');
 }
 
-// 立即执行初始化
 init();

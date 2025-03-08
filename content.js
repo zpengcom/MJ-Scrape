@@ -19,8 +19,8 @@ function createSettingsPanel() {
             <button class="close-button">×</button>
         </div>
         <div class="setting-item">
-            <label for="scrollDelay">滚动延迟 (毫秒):</label>
-            <input type="number" id="scrollDelay" min="500" max="5000" step="100" value="${localStorage.getItem('scrollDelay') || 1000}">
+            <label for="scrollDelay">滚动延迟(毫秒) 使用上下键可调整:</label>
+            <input type="number" id="scrollDelay" min="100" max="5000" step="100" value="${localStorage.getItem('scrollDelay') || 1000}">
         </div>
         <div class="settings-footer">
             <button id="saveSettings" class="save-button">
@@ -329,23 +329,11 @@ function isContentLoaded(pageScroll) {
     return loadingIndicators.length === 0;
 }
 
-// 分离 Prompt 和 Prompt 参数
-function splitPrompt(fullPrompt) {
-    const paramStartIndex = fullPrompt.indexOf('--');
-    if (paramStartIndex === -1) {
-        return { promptText: fullPrompt.trim(), promptParams: '' };
-    }
-    return {
-        promptText: fullPrompt.substring(0, paramStartIndex).trim(),
-        promptParams: fullPrompt.substring(paramStartIndex).trim()
-    };
-}
-
 // 滚动并抓取数据
 async function scrollAndScrape(checkActive) {
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    await new Promise(resolve => setTimeout(resolve, 50));
     
-    const scrollDelay = parseInt(localStorage.getItem('scrollDelay') || 1000);
+    const scrollDelay = parseInt(localStorage.getItem('scrollDelay') || 100);
     
     const resultDiv = document.getElementById('scrapeResult');
     if (!resultDiv) return;
@@ -491,7 +479,7 @@ async function scrollAndScrape(checkActive) {
 
         const currentHeight = pageScroll.scrollTop;
         pageScroll.scrollTo({
-            top: currentHeight + 300,
+            top: currentHeight + 600,
             behavior: 'smooth'
         });
         
@@ -531,6 +519,21 @@ async function scrollAndScrape(checkActive) {
     console.log('抓取结束，最终数据量:', scrapedData.length);
     updateResultDisplay(scrapedData, contentDiv, false);
 }
+
+
+
+// 分离 Prompt 和 Prompt 参数
+function splitPrompt(fullPrompt) {
+    const paramStartIndex = fullPrompt.indexOf('--');
+    if (paramStartIndex === -1) {
+        return { promptText: fullPrompt.trim(), promptParams: '' };
+    }
+    return {
+        promptText: fullPrompt.substring(0, paramStartIndex).trim(),
+        promptParams: fullPrompt.substring(paramStartIndex).trim()
+    };
+}
+
 
 // 获取最大尺寸图片链接并去掉分辨率标记
 function getMaxSizeImageUrl(style) {
@@ -972,7 +975,7 @@ style.textContent = `
         padding: 20px;
         border-radius: 8px;
         box-shadow: 0 4px 8px rgba(0,0,0,0.5);
-        z-index: 10001;
+        z-index: 10002;
         min-width: 300px;
     }
     

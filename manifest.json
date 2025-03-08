@@ -1,5 +1,5 @@
 {
-  "manifest_version": 3,
+  "manifest_version": 1.3,
   "name": "MidJourney Scraper",
   "version": "1.0",
   "description": "Scrape images, prompts, and usernames from MidJourney Explore page.",

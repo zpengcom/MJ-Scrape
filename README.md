@@ -1,6 +1,3 @@
-
- 
- 
  项目包含chrome插件和py下载脚本
  chrome插件使用：克隆项目 使用chrome加载目录 
 

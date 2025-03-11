@@ -479,7 +479,7 @@ async function scrollAndScrape(checkActive) {
 
         const currentHeight = pageScroll.scrollTop;
         pageScroll.scrollTo({
-            top: currentHeight + 600,
+            top: currentHeight + 1200,
             behavior: 'smooth'
         });
         

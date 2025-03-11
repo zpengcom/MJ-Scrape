@@ -680,7 +680,7 @@ function exportToCSV(scrapedData) {
         const userId = userIdMatch ? userIdMatch[1] : 'unknown';
         const userName = selectedData.length > 0 && selectedData[0].userName !== '未找到用户名' 
             ? selectedData[0].userName.replace(/[^a-zA-Z0-9_-]/g, '_') : 'unknown';
-        fileNamePrefix = `MJ-${userName}-${userId}`;
+        fileNamePrefix = `MJ-${userName}_${userId}`;
     }
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
